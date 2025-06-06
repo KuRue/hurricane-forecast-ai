@@ -171,26 +171,26 @@ docker run --gpus all -p 8000:8000 hurricane-forecast:latest
 
 ## 📈 Current Development Status
 
-### Phase 1: Foundation (Weeks 1-8) - **In Progress**
+### Phase 1: Foundation  - **In Progress**
 - [x] Project structure setup
 - [x] Environment configuration
-- [ ] Data pipeline implementation (Week 3-4)
-- [ ] GraphCast integration (Week 5-6)
-- [ ] Baseline validation (Week 7-8)
+- [ ] Data pipeline implementation 
+- [ ] GraphCast integration 
+- [ ] Baseline validation 
 
-### Phase 2: Model Development (Weeks 9-16) - **Planned**
+### Phase 2: Model Development  - **Planned**
 - [ ] CNN-Transformer implementation
 - [ ] Physics-informed neural networks
 - [ ] Fine-tuning pipeline
 - [ ] Ensemble system
 
-### Phase 3: Optimization (Weeks 17-24) - **Planned**
+### Phase 3: Optimization  - **Planned**
 - [ ] Memory optimization
 - [ ] Model quantization
 - [ ] Comprehensive validation
 - [ ] Performance benchmarking
 
-### Phase 4: Deployment (Weeks 25-32) - **Planned**
+### Phase 4: Deployment  - **Planned**
 - [ ] API development
 - [ ] Kubernetes deployment
 - [ ] Monitoring system
