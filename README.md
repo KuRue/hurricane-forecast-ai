@@ -37,7 +37,7 @@ A state-of-the-art hurricane forecasting system using AI weather models (GraphCa
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/hurricane-forecast-ai.git
+git clone https://github.com/KuRue/hurricane-forecast-ai.git
 cd hurricane-forecast-ai
 ```
 
