@@ -1,0 +1,123 @@
+version: '3.8'
+
+services:
+  hurricane-forecast:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: hurricane-forecast:dev
+    container_name: hurricane-forecast-dev
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - CUDA_VISIBLE_DEVICES=0
+      - PYTHONPATH=/app
+      - JUPYTER_ENABLE_LAB=yes
+      # MLflow
+      - MLFLOW_TRACKING_URI=file:///data/hurricane-forecast/mlruns
+      # Weights & Biases (optional)
+      - WANDB_API_KEY=${WANDB_API_KEY}
+      - WANDB_MODE=${WANDB_MODE:-offline}
+    volumes:
+      # Code (bind mount for development)
+      - ./src:/app/src
+      - ./scripts:/app/scripts
+      - ./configs:/app/configs
+      - ./notebooks:/app/notebooks
+      - ./tests:/app/tests
+      # Data (persistent volume)
+      - hurricane-data:/data/hurricane-forecast
+      # Cache directories
+      - ~/.cache:/root/.cache
+      # CDS API credentials
+      - ~/.cdsapirc:/root/.cdsapirc:ro
+    ports:
+      # API
+      - "8000:8000"
+      # Jupyter
+      - "8888:8888"
+      # TensorBoard
+      - "6006:6006"
+      # MLflow UI
+      - "5000:5000"
+    shm_size: '16gb'
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      stack:
+        soft: 67108864
+        hard: 67108864
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    command: ["bash"]
+    stdin_open: true
+    tty: true
+
+  # Optional: Separate Jupyter service
+  jupyter:
+    image: hurricane-forecast:dev
+    container_name: hurricane-forecast-jupyter
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - PYTHONPATH=/app
+    volumes:
+      - ./src:/app/src
+      - ./notebooks:/app/notebooks
+      - hurricane-data:/data/hurricane-forecast
+    ports:
+      - "8889:8888"
+    command: >
+      bash -c "source activate hurricane-forecast && 
+               jupyter lab --ip=0.0.0.0 --no-browser --allow-root 
+               --NotebookApp.token='' --NotebookApp.password=''"
+    profiles:
+      - jupyter
+
+  # Optional: TensorBoard service
+  tensorboard:
+    image: hurricane-forecast:dev
+    container_name: hurricane-forecast-tensorboard
+    volumes:
+      - hurricane-data:/data/hurricane-forecast
+    ports:
+      - "6007:6006"
+    command: >
+      bash -c "source activate hurricane-forecast && 
+               tensorboard --logdir=/data/hurricane-forecast/logs --host=0.0.0.0"
+    profiles:
+      - monitoring
+
+  # Optional: MLflow tracking server
+  mlflow:
+    image: hurricane-forecast:dev
+    container_name: hurricane-forecast-mlflow
+    volumes:
+      - hurricane-data:/data/hurricane-forecast
+    ports:
+      - "5001:5000"
+    command: >
+      bash -c "source activate hurricane-forecast && 
+               mlflow server --backend-store-uri file:///data/hurricane-forecast/mlruns 
+               --default-artifact-root file:///data/hurricane-forecast/mlruns 
+               --host 0.0.0.0"
+    profiles:
+      - monitoring
+
+volumes:
+  hurricane-data:
+    driver: local
+
+# Networks (optional, for multi-container setups)
+networks:
+  default:
+    name: hurricane-net
+    driver: bridge
