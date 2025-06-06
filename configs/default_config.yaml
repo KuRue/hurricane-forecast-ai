@@ -1,0 +1,224 @@
+# Hurricane Forecast AI - Default Configuration
+
+# Hydra configuration
+defaults:
+  - _self_
+  - data: era5
+  - model: ensemble
+  - training: default
+  - override hydra/launcher: basic
+
+# General settings
+project:
+  name: "hurricane-forecast-ai"
+  version: "0.1.0"
+  seed: 42
+  device: "cuda"  # cuda or cpu
+  mixed_precision: true
+  
+# Data configuration
+data:
+  # Data paths
+  root_dir: "${oc.env:HOME}/data/hurricane-forecast"
+  hurdat2_path: "${data.root_dir}/hurdat2/hurdat2.txt"
+  ibtracs_path: "${data.root_dir}/ibtracs/IBTrACS.ALL.v04r00.nc"
+  era5_cache_dir: "${data.root_dir}/era5"
+  
+  # Hurricane data settings
+  min_hurricane_intensity: 64  # knots (Category 1)
+  training_years: [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019]
+  validation_years: [2020, 2021]
+  test_years: [2022, 2023]
+  
+  # ERA5 settings
+  era5:
+    variables:
+      - "10m_u_component_of_wind"
+      - "10m_v_component_of_wind"
+      - "mean_sea_level_pressure"
+      - "2m_temperature"
+      - "sea_surface_temperature"
+      - "total_precipitation"
+      - "convective_available_potential_energy"
+    pressure_levels: [1000, 925, 850, 700, 500, 300, 200]
+    patch_size: 25.0  # degrees
+    
+  # Data pipeline settings
+  pipeline:
+    batch_size: 4
+    num_workers: 4
+    prefetch_factor: 2
+    pin_memory: true
+    shuffle: true
+    
+# Model configuration
+model:
+  # Model selection
+  name: "hurricane_ensemble"  # Options: graphcast, pangu, hurricane_cnn, ensemble
+  
+  # GraphCast settings
+  graphcast:
+    checkpoint_path: "${data.root_dir}/models/graphcast/params.npz"
+    resolution: 0.25  # degrees
+    num_layers: 16
+    hidden_dim: 512
+    num_heads: 8
+    
+  # Pangu-Weather settings
+  pangu:
+    checkpoint_path: "${data.root_dir}/models/pangu"
+    model_type: "24h"  # 1h, 3h, 6h, or 24h
+    patch_size: 4
+    
+  # Hurricane CNN-Transformer settings
+  hurricane_cnn:
+    # CNN encoder
+    cnn_channels: [64, 128, 256, 512]
+    cnn_kernel_size: 3
+    cnn_padding: 1
+    pool_size: 2
+    
+    # Transformer
+    d_model: 256
+    n_heads: 8
+    n_encoder_layers: 6
+    n_decoder_layers: 6
+    dim_feedforward: 1024
+    dropout: 0.1
+    
+    # Output heads
+    predict_track: true
+    predict_intensity: true
+    predict_size: true
+    
+  # Ensemble settings
+  ensemble:
+    num_members: 50
+    perturbation_scale: 0.01
+    voting_method: "weighted_mean"  # mean, weighted_mean, median
+    include_models: ["graphcast", "pangu", "hurricane_cnn"]
+    
+# Training configuration
+training:
+  # Optimization
+  optimizer:
+    name: "AdamW"
+    lr: 5e-5
+    weight_decay: 0.01
+    betas: [0.9, 0.999]
+    
+  # Learning rate schedule
+  scheduler:
+    name: "CosineAnnealingWarmRestarts"
+    T_0: 10
+    T_mult: 2
+    eta_min: 1e-7
+    
+  # Training settings
+  max_epochs: 100
+  gradient_clip_val: 1.0
+  gradient_accumulation_steps: 8
+  val_check_interval: 0.25
+  
+  # Loss weights
+  loss:
+    track_weight: 1.0
+    intensity_weight: 0.5
+    physics_weight: 0.1
+    
+  # Early stopping
+  early_stopping:
+    monitor: "val/track_error"
+    patience: 10
+    mode: "min"
+    
+  # Checkpointing
+  checkpoint:
+    save_top_k: 3
+    monitor: "val/track_error"
+    mode: "min"
+    save_last: true
+    
+  # Fine-tuning
+  fine_tuning:
+    use_lora: true
+    lora_r: 16
+    lora_alpha: 32
+    lora_dropout: 0.1
+    freeze_backbone: false
+    
+# Inference configuration
+inference:
+  # Prediction settings
+  forecast_hours: 120  # 5 days
+  time_step: 1  # hours
+  
+  # Memory optimization
+  use_mixed_precision: true
+  use_gradient_checkpointing: true
+  offload_to_cpu: false
+  
+  # API settings
+  api:
+    host: "0.0.0.0"
+    port: 8000
+    workers: 1
+    reload: false
+    
+# Evaluation configuration
+evaluation:
+  # Metrics
+  metrics:
+    - "track_error"
+    - "intensity_error"
+    - "along_track_error"
+    - "cross_track_error"
+    - "skill_score"
+    
+  # Baselines
+  baselines:
+    - "CLIPER5"
+    - "GFS"
+    - "ECMWF"
+    
+  # Forecast hours to evaluate
+  eval_forecast_hours: [12, 24, 48, 72, 96, 120]
+  
+# Logging configuration
+logging:
+  level: "INFO"
+  format: "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>"
+  
+# MLflow configuration
+mlflow:
+  tracking_uri: "file://${data.root_dir}/mlruns"
+  experiment_name: "hurricane-forecast"
+  run_name: null  # Auto-generated if null
+  
+# Weights & Biases configuration
+wandb:
+  project: "hurricane-forecast"
+  entity: null  # Your W&B username/team
+  mode: "online"  # online, offline, disabled
+  
+# Hydra configuration
+hydra:
+  run:
+    dir: outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+  sweep:
+    dir: multirun/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    subdir: ${hydra.job.num}
+  launcher:
+    _target_: hydra._internal.core_plugins.basic_launcher.BasicLauncher
+  help:
+    template: |
+      Hurricane Forecast AI System
+      
+      == Configuration groups ==
+      $APP_CONFIG_GROUPS
+      
+      == Config ==
+      $CONFIG
+      
+      Powered by Hydra (https://hydra.cc)
+      Use --hydra-help to view Hydra specific help
